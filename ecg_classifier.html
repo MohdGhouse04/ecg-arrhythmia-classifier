@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECG Arrhythmia Classifier</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c10;--surface:#0d1520;--surface2:#111d2e;--border:#1a2d45;--accent:#00d4ff;--accent2:#00ff9d;--danger:#ff4560;--warning:#ffd93d;--text:#e8f4f8;--muted:#4a6880}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.pulse-line{position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scan 4s linear infinite;z-index:10;opacity:.6}
+@keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.container{max-width:1100px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+header{padding:40px 0 32px;border-bottom:1px solid var(--border);margin-bottom:48px}
+.header-inner{display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:14px}
+.logo-icon{width:40px;height:40px}
+.logo-text h1{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;letter-spacing:-.5px}
+.logo-text p{font-size:12px;color:var(--muted);letter-spacing:.5px;margin-top:2px}
+.status-badge{display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:11px;padding:6px 14px;border-radius:4px;letter-spacing:1px;border:1px solid var(--border);color:var(--muted);transition:all .3s}
+.status-badge.online{border-color:var(--accent2);color:var(--accent2)}
+.status-badge.offline{border-color:var(--danger);color:var(--danger)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pdot 1.5s ease-in-out infinite}
+@keyframes pdot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+.ecg-display{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:32px;position:relative;overflow:hidden}
+.ecg-display::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.4}
+.ecg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.ecg-label{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.live-dot{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--accent2);font-family:'Space Mono',monospace}
+.live-dot span{width:6px;height:6px;border-radius:50%;background:var(--accent2);animation:pdot 1.5s ease-in-out infinite}
+canvas#ecgCanvas{width:100%;height:120px;display:block}
+.upload-section{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px}
+.upload-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;transition:border-color .2s}
+.upload-card:hover{border-color:rgba(0,212,255,.3)}
+.upload-card h3{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:16px}
+.drop-zone{border:1px dashed var(--border);border-radius:8px;padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:rgba(0,212,255,.03)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{width:40px;height:40px;margin:0 auto 12px;color:var(--muted)}
+.drop-zone p{font-size:13px;color:var(--muted);margin-bottom:6px}
+.drop-zone .hint{font-size:11px;color:var(--accent);font-family:'Space Mono',monospace}
+.file-selected{font-size:12px;color:var(--accent);font-family:'Space Mono',monospace;margin-top:12px;padding:8px 12px;background:rgba(0,212,255,.05);border-radius:4px;display:none}
+.api-section label{display:block;font-size:12px;color:var(--muted);margin-bottom:8px;font-family:'Space Mono',monospace;letter-spacing:1px}
+.api-section input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-size:13px;font-family:'Space Mono',monospace;margin-bottom:14px;outline:none;transition:border-color .2s}
+.api-section input:focus{border-color:var(--accent)}
+.btn-analyze{width:100%;padding:14px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s;margin-top:4px}
+.btn-analyze:hover{background:#33ddff;transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,212,255,.25)}
+.btn-analyze:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.error-msg{display:none;padding:12px 16px;background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.2);border-radius:6px;font-size:12px;color:var(--danger);font-family:'Space Mono',monospace;margin-bottom:12px;letter-spacing:.5px}
+.results-section{display:none}
+.results-section.visible{display:block}
+.results-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px}
+.result-card h3{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:20px}
+.diagnosis-main{display:flex;align-items:flex-start;gap:16px;margin-bottom:20px}
+.diagnosis-icon{width:52px;height:52px;border-radius:10px;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:24px}
+.diagnosis-text h2{font-size:20px;font-weight:600;line-height:1.3;margin-bottom:4px}
+.diagnosis-text .code{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
+.diagnosis-text .desc{font-size:13px;color:var(--muted);margin-top:4px}
+.severity-badge{display:inline-block;padding:4px 10px;border-radius:4px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:1px;margin-top:8px}
+.severity-Normal{background:rgba(0,255,157,.1);color:var(--accent2);border:1px solid rgba(0,255,157,.2)}
+.severity-Low{background:rgba(0,212,255,.1);color:var(--accent);border:1px solid rgba(0,212,255,.2)}
+.severity-Moderate{background:rgba(255,217,61,.1);color:var(--warning);border:1px solid rgba(255,217,61,.2)}
+.severity-High{background:rgba(255,69,96,.1);color:var(--danger);border:1px solid rgba(255,69,96,.2)}
+.confidence-bar-wrap{margin-top:16px}
+.confidence-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px}
+.confidence-label span:first-child{color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1px}
+.confidence-label span:last-child{color:var(--accent);font-family:'Space Mono',monospace;font-weight:700}
+.confidence-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.confidence-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width 1s cubic-bezier(.4,0,.2,1);width:0%}
+.prob-list{display:flex;flex-direction:column;gap:12px}
+.prob-item{display:flex;align-items:center;gap:12px}
+.prob-name{font-size:12px;color:var(--muted);width:170px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prob-name.active{color:var(--accent);font-weight:500}
+.prob-bar-wrap{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.prob-bar-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1);width:0%}
+.prob-bar-fill.active{background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.prob-bar-fill.inactive{background:var(--muted);opacity:.4}
+.prob-pct{font-family:'Space Mono',monospace;font-size:11px;width:44px;text-align:right;color:var(--muted);flex-shrink:0}
+.prob-pct.active{color:var(--accent)}
+.info-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;margin-bottom:24px}
+.info-card h3{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:20px}
+.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.info-item{padding:16px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)}
+.info-item .label{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1px;margin-bottom:8px}
+.info-item .value{font-size:16px;font-weight:600;font-family:'Space Mono',monospace}
+.info-item .value.highlight{color:var(--accent2)}
+.disclaimer{padding:16px 20px;background:rgba(255,69,96,.05);border:1px solid rgba(255,69,96,.15);border-radius:8px;font-size:12px;color:var(--muted);display:flex;gap:12px;align-items:flex-start;margin-bottom:48px}
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(8,12,16,.85);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+.loading-overlay.visible{display:flex}
+.spinner{width:48px;height:48px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:'Space Mono',monospace;font-size:13px;color:var(--accent);letter-spacing:2px}
+@media(max-width:768px){.upload-section,.results-grid,.info-grid{grid-template-columns:1fr}.header-inner{flex-direction:column;gap:16px;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="pulse-line"></div>
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">ANALYZING ECG...</div>
+</div>
+<div class="container">
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="40" height="40" rx="8" fill="rgba(0,212,255,0.08)" stroke="rgba(0,212,255,0.2)" stroke-width="1"/>
+            <polyline points="4,20 10,20 13,10 17,30 21,14 25,24 28,20 36,20" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>ECG CLASSIFIER</h1>
+          <p>Arrhythmia Detection · CNN + BiLSTM + Attention · 95.02% Accuracy</p>
+        </div>
+      </div>
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">CHECKING API...</span>
+      </div>
+    </div>
+  </header>
+  <div class="ecg-display">
+    <div class="ecg-header">
+      <span class="ecg-label">12-Lead ECG Monitor</span>
+      <div class="live-dot"><span></span>LIVE</div>
+    </div>
+    <canvas id="ecgCanvas" width="1000" height="120"></canvas>
+  </div>
+  <div class="upload-section">
+    <div class="upload-card">
+      <h3>Upload ECG File</h3>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".mat">
+        <div class="drop-icon">
+          <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M20 26V14M14 20l6-6 6 6"/>
+            <path d="M8 28c-2.2 0-4-1.8-4-4 0-2 1.4-3.6 3.3-3.9C7.8 16.8 10.2 14 14 14c.7 0 1.4.1 2 .3C17.2 12.3 18.9 11 21 11c3.3 0 6 2.7 6 6 0 .3 0 .6-.1.9C28.7 18.4 30 20 30 22c0 2.2-1.8 4-4 4"/>
+          </svg>
+        </div>
+        <p>Drop your .mat ECG file here</p>
+        <span class="hint">or click to browse</span>
+      </div>
+      <div class="file-selected" id="fileSelected"></div>
+    </div>
+    <div class="upload-card api-section">
+      <h3>API Settings</h3>
+      <label>API Endpoint</label>
+      <input type="text" id="apiUrl" value="http://localhost:5000">
+      <div class="error-msg" id="errorMsg"></div>
+      <button class="btn-analyze" id="analyzeBtn" onclick="analyze()">ANALYZE ECG</button>
+    </div>
+  </div>
+  <div class="results-section" id="resultsSection">
+    <div class="results-grid">
+      <div class="result-card">
+        <h3>Primary Diagnosis</h3>
+        <div class="diagnosis-main">
+          <div class="diagnosis-icon" id="diagIcon">🫀</div>
+          <div class="diagnosis-text">
+            <h2 id="diagName">—</h2>
+            <div class="code" id="diagCode">SNOMED CODE</div>
+            <div class="desc" id="diagDesc"></div>
+            <div id="severityBadge"></div>
+          </div>
+        </div>
+        <div class="confidence-bar-wrap">
+          <div class="confidence-label"><span>CONFIDENCE</span><span id="confPct">0%</span></div>
+          <div class="confidence-bar"><div class="confidence-fill" id="confFill"></div></div>
+        </div>
+      </div>
+      <div class="result-card">
+        <h3>All Class Probabilities</h3>
+        <div class="prob-list" id="probList"></div>
+      </div>
+    </div>
+    <div class="info-card">
+      <h3>Signal Analysis</h3>
+      <div class="info-grid">
+        <div class="info-item"><div class="label">FILE</div><div class="value" id="infoFile" style="font-size:12px">—</div></div>
+        <div class="info-item"><div class="label">LEADS</div><div class="value highlight">12</div></div>
+        <div class="info-item"><div class="label">MODEL ACC</div><div class="value highlight">95.02%</div></div>
+        <div class="info-item"><div class="label">TTA ACC</div><div class="value">95.08%</div></div>
+      </div>
+    </div>
+    <div class="disclaimer">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;color:#ff4560;margin-top:1px"><circle cx="8" cy="8" r="7"/><path d="M8 5v4M8 11v.5"/></svg>
+      <span>For research and educational purposes only. Not a substitute for professional medical diagnosis. Always consult a qualified cardiologist for clinical decisions.</span>
+    </div>
+  </div>
+</div>
+<script>
+const canvas=document.getElementById('ecgCanvas');
+const ctx=canvas.getContext('2d');
+let offset=0;
+function ecgY(x){const b=Math.sin(x*.05)*3,m=x%120;if(m>50&&m<54)return 35+b;if(m>54&&m<58)return -8+b;if(m>58&&m<68)return 55+b;if(m>68&&m<72)return -20+b;if(m>72&&m<76)return 5+b;if(m>76&&m<90)return 10+b;return b}
+function draw(){const W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);ctx.strokeStyle='rgba(0,212,255,.05)';ctx.lineWidth=.5;for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}ctx.beginPath();ctx.strokeStyle='#00d4ff';ctx.lineWidth=1.5;ctx.shadowColor='#00d4ff';ctx.shadowBlur=6;for(let x=0;x<W;x++){const y=H/2-ecgY(x+offset);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke();ctx.shadowBlur=0;const g=ctx.createLinearGradient(0,0,W,0);g.addColorStop(0,'rgba(13,21,32,.8)');g.addColorStop(.1,'transparent');g.addColorStop(.9,'transparent');g.addColorStop(1,'rgba(13,21,32,.8)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);offset+=1.5;requestAnimationFrame(draw)}
+canvas.width=canvas.offsetWidth||1000;draw();
+const fileInput=document.getElementById('fileInput');
+const fileSelected=document.getElementById('fileSelected');
+const dropZone=document.getElementById('dropZone');
+fileInput.addEventListener('change',e=>{if(e.target.files[0]){fileSelected.textContent='✓  '+e.target.files[0].name;fileSelected.style.display='block'}});
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over')});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0]){fileInput.files=e.dataTransfer.files;fileSelected.textContent='✓  '+e.dataTransfer.files[0].name;fileSelected.style.display='block'}});
+const badge=document.getElementById('statusBadge');
+const statusText=document.getElementById('statusText');
+async function checkHealth(){const url=document.getElementById('apiUrl').value;try{const r=await fetch(url+'/health',{signal:AbortSignal.timeout(2000)});if(r.ok){badge.className='status-badge online';statusText.textContent='API ONLINE'}else throw 0}catch{badge.className='status-badge offline';statusText.textContent='API OFFLINE'}}
+checkHealth();setInterval(checkHealth,5000);
+const classNames={'426177001':'Sinus Bradycardia','426783006':'Normal Sinus Rhythm','427084000':'Sinus Tachycardia','426761007':'SVT','164890007':'RBBB'};
+async function analyze(){
+  const file=fileInput.files[0];
+  const errorMsg=document.getElementById('errorMsg');
+  errorMsg.style.display='none';
+  if(!file){errorMsg.textContent='Please upload a .mat file first';errorMsg.style.display='block';return}
+  const url=document.getElementById('apiUrl').value;
+  document.getElementById('loadingOverlay').classList.add('visible');
+  document.getElementById('analyzeBtn').disabled=true;
+  try{
+    const fd=new FormData();fd.append('file',file);
+    const res=await fetch(url+'/predict',{method:'POST',body:fd});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Prediction failed');
+    showResults(data);
+  }catch(e){
+    errorMsg.textContent='Error: '+e.message+' — Is the API running? Run: python scripts/api.py';
+    errorMsg.style.display='block';
+  }finally{
+    document.getElementById('loadingOverlay').classList.remove('visible');
+    document.getElementById('analyzeBtn').disabled=false;
+  }
+}
+function showResults(data){
+  document.getElementById('diagIcon').textContent=data.icon||'🫀';
+  document.getElementById('diagName').textContent=data.name;
+  document.getElementById('diagCode').textContent='SNOMED: '+data.prediction;
+  document.getElementById('diagDesc').textContent=data.description;
+  document.getElementById('confPct').textContent=data.confidence+'%';
+  document.getElementById('infoFile').textContent=data.filename;
+  const sev=data.severity||'Low';
+  document.getElementById('severityBadge').innerHTML='<span class="severity-badge severity-'+sev+'">'+sev.toUpperCase()+'</span>';
+  setTimeout(()=>{document.getElementById('confFill').style.width=data.confidence+'%'},100);
+  const list=document.getElementById('probList');list.innerHTML='';
+  const sorted=Object.entries(data.all_probs).sort((a,b)=>b[1]-a[1]);
+  sorted.forEach(([code,pct])=>{
+    const isActive=code===data.prediction;
+    const div=document.createElement('div');div.className='prob-item';
+    div.innerHTML='<div class="prob-name '+(isActive?'active':'')+'">'+( classNames[code]||code)+'</div><div class="prob-bar-wrap"><div class="prob-bar-fill '+(isActive?'active':'inactive')+'" data-pct="'+pct+'" style="width:0%"></div></div><div class="prob-pct '+(isActive?'active':'')+'">'+pct+'%</div>';
+    list.appendChild(div);
+  });
+  document.getElementById('resultsSection').classList.add('visible');
+  document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});
+  setTimeout(()=>{document.querySelectorAll('.prob-bar-fill').forEach(b=>{b.style.width=b.dataset.pct+'%'})},200);
+}
+</script>
+</body>
+</html>

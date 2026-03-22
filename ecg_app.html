@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECG Arrhythmia Classifier</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c10;--surface:#0d1520;--surface2:#111d2e;--border:#1a2d45;--accent:#00d4ff;--accent2:#00ff9d;--danger:#ff4560;--warning:#ffd93d;--text:#e8f4f8;--muted:#4a6880}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.pulse-line{position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scan 4s linear infinite;z-index:100;opacity:.6}
+@keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+
+/* ── Auth Pages ── */
+.auth-page{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;position:relative;z-index:1}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px;justify-content:center}
+.auth-logo svg{width:36px;height:36px}
+.auth-logo h1{font-family:'Space Mono',monospace;font-size:16px;font-weight:700}
+.auth-card h2{font-size:22px;font-weight:600;margin-bottom:6px;text-align:center}
+.auth-card p{font-size:13px;color:var(--muted);text-align:center;margin-bottom:28px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1px;margin-bottom:8px}
+.form-group input,.form-group select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-size:14px;outline:none;transition:border-color .2s;font-family:'DM Sans',sans-serif}
+.form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+.form-group select option{background:var(--surface2)}
+.btn-primary{width:100%;padding:14px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s;margin-top:8px}
+.btn-primary:hover{background:#33ddff;transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,212,255,.25)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.auth-switch{text-align:center;margin-top:20px;font-size:13px;color:var(--muted)}
+.auth-switch a{color:var(--accent);cursor:pointer;text-decoration:none}
+.auth-switch a:hover{text-decoration:underline}
+.auth-error{padding:10px 14px;background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.2);border-radius:6px;font-size:12px;color:var(--danger);margin-bottom:16px;display:none;font-family:'Space Mono',monospace}
+
+/* ── Dashboard ── */
+.dashboard{display:none;position:relative;z-index:1}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar-logo{display:flex;align-items:center;gap:10px}
+.topbar-logo svg{width:28px;height:28px}
+.topbar-logo span{font-family:'Space Mono',monospace;font-size:14px;font-weight:700}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.user-badge{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.user-avatar{width:32px;height:32px;border-radius:50%;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:12px;color:var(--accent)}
+.btn-logout{padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Space Mono',monospace;letter-spacing:1px;transition:all .2s}
+.btn-logout:hover{border-color:var(--danger);color:var(--danger)}
+.tabs{display:flex;gap:4px;padding:0 32px;background:var(--surface);border-bottom:1px solid var(--border)}
+.tab{padding:14px 20px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-family:'Space Mono',monospace;letter-spacing:.5px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{display:none;padding:32px}
+.tab-content.active{display:block}
+
+/* ── Stats ── */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.stat-card .label{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1px;margin-bottom:8px}
+.stat-card .value{font-size:28px;font-weight:600;font-family:'Space Mono',monospace}
+.stat-card .value.accent{color:var(--accent2)}
+
+/* ── ECG Upload Section ── */
+.section-title{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:20px}
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px}
+.card:hover{border-color:rgba(0,212,255,.2)}
+.drop-zone{border:1px dashed var(--border);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:rgba(0,212,255,.03)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-zone svg{width:36px;height:36px;color:var(--muted);margin:0 auto 10px;display:block}
+.drop-zone p{font-size:13px;color:var(--muted);margin-bottom:4px}
+.drop-zone span{font-size:11px;color:var(--accent);font-family:'Space Mono',monospace}
+.file-name{font-size:12px;color:var(--accent);font-family:'Space Mono',monospace;margin-top:10px;padding:6px 10px;background:rgba(0,212,255,.05);border-radius:4px;display:none}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn-analyze{width:100%;padding:13px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s;margin-top:12px}
+.btn-analyze:hover{background:#33ddff;transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,212,255,.2)}
+.btn-analyze:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.predict-error{display:none;padding:10px 14px;background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.2);border-radius:6px;font-size:12px;color:var(--danger);margin-top:10px;font-family:'Space Mono',monospace}
+
+/* ── Result ── */
+.result-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;display:none}
+.result-box.visible{display:block}
+.result-top{display:flex;align-items:flex-start;gap:16px;margin-bottom:20px}
+.result-icon{width:52px;height:52px;border-radius:10px;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.15);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.result-text h2{font-size:20px;font-weight:600;margin-bottom:4px}
+.result-text .code{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
+.result-text .desc{font-size:13px;color:var(--muted);margin-top:4px}
+.sev-badge{display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:1px;margin-top:6px}
+.sev-Normal{background:rgba(0,255,157,.1);color:var(--accent2);border:1px solid rgba(0,255,157,.2)}
+.sev-Low{background:rgba(0,212,255,.1);color:var(--accent);border:1px solid rgba(0,212,255,.2)}
+.sev-Moderate{background:rgba(255,217,61,.1);color:var(--warning);border:1px solid rgba(255,217,61,.2)}
+.sev-High{background:rgba(255,69,96,.1);color:var(--danger);border:1px solid rgba(255,69,96,.2)}
+.conf-wrap{margin-bottom:20px}
+.conf-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px}
+.conf-label span:first-child{color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1px}
+.conf-label span:last-child{color:var(--accent);font-family:'Space Mono',monospace;font-weight:700}
+.conf-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.conf-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width 1s cubic-bezier(.4,0,.2,1);width:0%}
+.prob-list{display:flex;flex-direction:column;gap:10px}
+.prob-item{display:flex;align-items:center;gap:10px}
+.prob-name{font-size:12px;color:var(--muted);width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prob-name.active{color:var(--accent)}
+.prob-bar-wrap{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.prob-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1);width:0%}
+.prob-fill.active{background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.prob-fill.inactive{background:var(--muted);opacity:.3}
+.prob-pct{font-family:'Space Mono',monospace;font-size:11px;width:40px;text-align:right;color:var(--muted);flex-shrink:0}
+.prob-pct.active{color:var(--accent)}
+.saved-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(0,255,157,.08);border:1px solid rgba(0,255,157,.2);border-radius:6px;font-size:12px;color:var(--accent2);font-family:'Space Mono',monospace;margin-top:12px}
+
+/* ── History Table ── */
+.history-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.history-count{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted)}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:var(--surface2)}
+th{padding:12px 16px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:1px;text-align:left;font-weight:400;border-bottom:1px solid var(--border)}
+td{padding:14px 16px;font-size:13px;border-bottom:1px solid rgba(26,45,69,.5)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(0,212,255,.02)}
+.td-patient{font-weight:500}
+.td-diagnosis{color:var(--accent)}
+.td-confidence{font-family:'Space Mono',monospace;font-size:12px}
+.td-date{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
+.btn-delete{padding:4px 10px;background:transparent;border:1px solid rgba(255,69,96,.2);border-radius:4px;color:var(--danger);font-size:11px;cursor:pointer;font-family:'Space Mono',monospace;transition:all .2s}
+.btn-delete:hover{background:rgba(255,69,96,.08)}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state svg{width:48px;height:48px;margin:0 auto 16px;display:block;opacity:.3}
+.empty-state p{font-size:14px}
+
+/* ── Loading ── */
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(8,12,16,.85);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+.loading-overlay.visible{display:flex}
+.spinner{width:44px;height:44px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:'Space Mono',monospace;font-size:13px;color:var(--accent);letter-spacing:2px}
+
+@media(max-width:768px){.upload-grid,.stats-grid,.form-row{grid-template-columns:1fr}.topbar{padding:0 16px}.tab-content{padding:16px}.tabs{padding:0 16px;overflow-x:auto}}
+</style>
+</head>
+<body>
+<div class="pulse-line"></div>
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">LOADING...</div>
+</div>
+
+<!-- ── LOGIN PAGE ── -->
+<div class="auth-page" id="loginPage">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="rgba(0,212,255,0.08)" stroke="rgba(0,212,255,0.2)" stroke-width="1"/><polyline points="4,20 10,20 13,10 17,30 21,14 25,24 28,20 36,20" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1>ECG CLASSIFIER</h1>
+    </div>
+    <h2>Welcome back</h2>
+    <p>Sign in to your account to continue</p>
+    <div class="auth-error" id="loginError"></div>
+    <div class="form-group"><label>EMAIL</label><input type="email" id="loginEmail" placeholder="you@example.com"></div>
+    <div class="form-group"><label>PASSWORD</label><input type="password" id="loginPassword" placeholder="••••••••"></div>
+    <button class="btn-primary" onclick="doLogin()">SIGN IN</button>
+    <div class="auth-switch">Don't have an account? <a onclick="showPage('register')">Create one</a></div>
+  </div>
+</div>
+
+<!-- ── REGISTER PAGE ── -->
+<div class="auth-page" id="registerPage" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="rgba(0,212,255,0.08)" stroke="rgba(0,212,255,0.2)" stroke-width="1"/><polyline points="4,20 10,20 13,10 17,30 21,14 25,24 28,20 36,20" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1>ECG CLASSIFIER</h1>
+    </div>
+    <h2>Create account</h2>
+    <p>Start classifying ECG arrhythmias today</p>
+    <div class="auth-error" id="registerError"></div>
+    <div class="form-group"><label>FULL NAME</label><input type="text" id="regName" placeholder="Mohd Ghouse"></div>
+    <div class="form-group"><label>EMAIL</label><input type="email" id="regEmail" placeholder="you@example.com"></div>
+    <div class="form-group"><label>PASSWORD</label><input type="password" id="regPassword" placeholder="Min. 6 characters"></div>
+    <button class="btn-primary" onclick="doRegister()">CREATE ACCOUNT</button>
+    <div class="auth-switch">Already have an account? <a onclick="showPage('login')">Sign in</a></div>
+  </div>
+</div>
+
+<!-- ── DASHBOARD ── -->
+<div class="dashboard" id="dashboard">
+  <div class="topbar">
+    <div class="topbar-logo">
+      <svg viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="rgba(0,212,255,0.08)" stroke="rgba(0,212,255,0.2)" stroke-width="1"/><polyline points="4,20 10,20 13,10 17,30 21,14 25,24 28,20 36,20" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>ECG CLASSIFIER</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-badge">
+        <div class="user-avatar" id="userAvatar">M</div>
+        <span id="userName">User</span>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">LOGOUT</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('analyze')">ANALYZE ECG</div>
+    <div class="tab" onclick="switchTab('history')">PATIENT HISTORY</div>
+  </div>
+
+  <!-- Analyze Tab -->
+  <div class="tab-content active" id="tab-analyze">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="label">TOTAL ANALYSES</div><div class="value accent" id="statTotal">0</div></div>
+      <div class="stat-card"><div class="label">AVG CONFIDENCE</div><div class="value" id="statConf">0%</div></div>
+      <div class="stat-card"><div class="label">MODEL ACCURACY</div><div class="value accent">95.02%</div></div>
+    </div>
+
+    <div class="section-title">New ECG Analysis</div>
+    <div class="upload-grid">
+      <div class="card">
+        <div class="section-title">Upload ECG File</div>
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" accept=".mat">
+          <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 26V14M14 20l6-6 6 6"/><path d="M8 28c-2.2 0-4-1.8-4-4 0-2 1.4-3.6 3.3-3.9C7.8 16.8 10.2 14 14 14c.7 0 1.4.1 2 .3C17.2 12.3 18.9 11 21 11c3.3 0 6 2.7 6 6 0 .3 0 .6-.1.9C28.7 18.4 30 20 30 22c0 2.2-1.8 4-4 4"/></svg>
+          <p>Drop .mat ECG file here</p>
+          <span>or click to browse</span>
+        </div>
+        <div class="file-name" id="fileName"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Patient Details</div>
+        <div class="form-group"><label>PATIENT NAME</label><input type="text" id="patientName" placeholder="Enter patient name"></div>
+        <div class="form-row">
+          <div class="form-group"><label>AGE</label><input type="number" id="patientAge" placeholder="Age"></div>
+          <div class="form-group"><label>GENDER</label>
+            <select id="patientGender">
+              <option value="">Select</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="predict-error" id="predictError"></div>
+        <button class="btn-analyze" onclick="doPredict()">ANALYZE ECG</button>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="result-box" id="resultBox">
+      <div class="section-title">Analysis Result</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          <div class="result-top">
+            <div class="result-icon" id="resIcon">🫀</div>
+            <div class="result-text">
+              <h2 id="resName">—</h2>
+              <div class="code" id="resCode"></div>
+              <div class="desc" id="resDesc"></div>
+              <div id="resSev"></div>
+            </div>
+          </div>
+          <div class="conf-wrap">
+            <div class="conf-label"><span>CONFIDENCE</span><span id="resConf">0%</span></div>
+            <div class="conf-bar"><div class="conf-fill" id="resFill"></div></div>
+          </div>
+          <div class="saved-badge">✓ Saved to patient history</div>
+        </div>
+        <div>
+          <div class="section-title">Class Probabilities</div>
+          <div class="prob-list" id="probList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Tab -->
+  <div class="tab-content" id="tab-history">
+    <div class="history-header">
+      <div class="section-title" style="margin:0">Patient History</div>
+      <div class="history-count" id="historyCount">0 records</div>
+    </div>
+    <div id="historyContent"></div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:5000/api';
+let token = localStorage.getItem('ecg_token');
+const classNames = {'426177001':'Sinus Bradycardia','426783006':'Normal Sinus Rhythm','427084000':'Sinus Tachycardia','426761007':'SVT','164890007':'RBBB'};
+
+function showPage(page) {
+  document.getElementById('loginPage').style.display = page==='login' ? 'flex' : 'none';
+  document.getElementById('registerPage').style.display = page==='register' ? 'flex' : 'none';
+  document.getElementById('dashboard').style.display = page==='dashboard' ? 'block' : 'none';
+}
+
+function loading(show, text='LOADING...') {
+  document.getElementById('loadingOverlay').classList.toggle('visible', show);
+  document.getElementById('loadingText').textContent = text;
+}
+
+async function apiCall(endpoint, method='GET', body=null, isForm=false) {
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (!isForm) headers['Content-Type'] = 'application/json';
+  const opts = { method, headers };
+  if (body) opts.body = isForm ? body : JSON.stringify(body);
+  const res = await fetch(API + endpoint, opts);
+  return { data: await res.json(), ok: res.ok, status: res.status };
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  if (!email || !password) { err.textContent = 'Please fill all fields'; err.style.display = 'block'; return; }
+  loading(true, 'SIGNING IN...');
+  try {
+    const { data, ok } = await apiCall('/login', 'POST', { email, password });
+    if (!ok) { err.textContent = data.error; err.style.display = 'block'; return; }
+    token = data.token;
+    localStorage.setItem('ecg_token', token);
+    await loadDashboard(data.user);
+  } catch(e) { err.textContent = 'Cannot connect to server. Is the API running?'; err.style.display = 'block'; }
+  finally { loading(false); }
+}
+
+async function doRegister() {
+  const name = document.getElementById('regName').value;
+  const email = document.getElementById('regEmail').value;
+  const password = document.getElementById('regPassword').value;
+  const err = document.getElementById('registerError');
+  err.style.display = 'none';
+  if (!name || !email || !password) { err.textContent = 'Please fill all fields'; err.style.display = 'block'; return; }
+  loading(true, 'CREATING ACCOUNT...');
+  try {
+    const { data, ok } = await apiCall('/register', 'POST', { name, email, password });
+    if (!ok) { err.textContent = data.error; err.style.display = 'block'; return; }
+    token = data.token;
+    localStorage.setItem('ecg_token', token);
+    await loadDashboard(data.user);
+  } catch(e) { err.textContent = 'Cannot connect to server. Is the API running?'; err.style.display = 'block'; }
+  finally { loading(false); }
+}
+
+async function loadDashboard(user) {
+  document.getElementById('userName').textContent = user.name;
+  document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
+  showPage('dashboard');
+  await loadStats();
+}
+
+async function loadStats() {
+  try {
+    const { data } = await apiCall('/stats');
+    document.getElementById('statTotal').textContent = data.total;
+    document.getElementById('statConf').textContent = data.avg_confidence + '%';
+  } catch(e) {}
+}
+
+function doLogout() {
+  token = null;
+  localStorage.removeItem('ecg_token');
+  showPage('login');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['analyze','history'][i]===tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  if (tab === 'history') loadHistory();
+}
+
+// File upload
+const fileInput = document.getElementById('fileInput');
+const fileName = document.getElementById('fileName');
+const dropZone = document.getElementById('dropZone');
+fileInput.addEventListener('change', e => { if(e.target.files[0]){ fileName.textContent='✓  '+e.target.files[0].name; fileName.style.display='block'; }});
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if(e.dataTransfer.files[0]){ fileInput.files=e.dataTransfer.files; fileName.textContent='✓  '+e.dataTransfer.files[0].name; fileName.style.display='block'; }});
+
+async function doPredict() {
+  const file = fileInput.files[0];
+  const err = document.getElementById('predictError');
+  err.style.display = 'none';
+  if (!file) { err.textContent = 'Please upload a .mat file'; err.style.display = 'block'; return; }
+  loading(true, 'ANALYZING ECG...');
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('patient_name', document.getElementById('patientName').value || 'Unknown');
+    fd.append('patient_age', document.getElementById('patientAge').value || '');
+    fd.append('patient_gender', document.getElementById('patientGender').value || '');
+    const { data, ok } = await apiCall('/predict', 'POST', fd, true);
+    if (!ok) { err.textContent = data.error; err.style.display = 'block'; return; }
+    showResult(data);
+    await loadStats();
+  } catch(e) { err.textContent = 'Error: ' + e.message; err.style.display = 'block'; }
+  finally { loading(false); }
+}
+
+function showResult(data) {
+  document.getElementById('resIcon').textContent = data.icon || '🫀';
+  document.getElementById('resName').textContent = data.name;
+  document.getElementById('resCode').textContent = 'SNOMED: ' + data.prediction;
+  document.getElementById('resDesc').textContent = data.description;
+  document.getElementById('resConf').textContent = data.confidence + '%';
+  const sev = data.severity || 'Low';
+  document.getElementById('resSev').innerHTML = '<span class="sev-badge sev-'+sev+'">'+sev.toUpperCase()+'</span>';
+  setTimeout(() => { document.getElementById('resFill').style.width = data.confidence + '%'; }, 100);
+  const list = document.getElementById('probList'); list.innerHTML = '';
+  Object.entries(data.all_probs).sort((a,b)=>b[1]-a[1]).forEach(([code,pct]) => {
+    const active = code === data.prediction;
+    const div = document.createElement('div'); div.className = 'prob-item';
+    div.innerHTML = '<div class="prob-name '+(active?'active':'')+'">'+( classNames[code]||code)+'</div><div class="prob-bar-wrap"><div class="prob-fill '+(active?'active':'inactive')+'" data-pct="'+pct+'" style="width:0%"></div></div><div class="prob-pct '+(active?'active':'')+'">'+pct+'%</div>';
+    list.appendChild(div);
+  });
+  document.getElementById('resultBox').classList.add('visible');
+  document.getElementById('resultBox').scrollIntoView({ behavior: 'smooth' });
+  setTimeout(() => { document.querySelectorAll('.prob-fill').forEach(b => b.style.width = b.dataset.pct + '%'); }, 200);
+}
+
+async function loadHistory() {
+  loading(true, 'LOADING HISTORY...');
+  try {
+    const { data } = await apiCall('/history');
+    document.getElementById('historyCount').textContent = data.total + ' records';
+    const content = document.getElementById('historyContent');
+    if (data.total === 0) {
+      content.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><p>No analyses yet. Upload an ECG to get started.</p></div>';
+      return;
+    }
+    content.innerHTML = '<div class="table-wrap"><table><thead><tr><th>PATIENT</th><th>AGE</th><th>GENDER</th><th>DIAGNOSIS</th><th>CONFIDENCE</th><th>DATE</th><th></th></tr></thead><tbody id="historyBody"></tbody></table></div>';
+    const tbody = document.getElementById('historyBody');
+    data.predictions.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td class="td-patient">'+(p.patient_name||'Unknown')+'</td><td>'+(p.patient_age||'—')+'</td><td>'+(p.patient_gender||'—')+'</td><td class="td-diagnosis">'+p.diagnosis_name+'</td><td class="td-confidence">'+p.confidence+'%</td><td class="td-date">'+p.created_at+'</td><td><button class="btn-delete" onclick="deleteRecord('+p.id+')">DELETE</button></td>';
+      tbody.appendChild(tr);
+    });
+  } catch(e) {}
+  finally { loading(false); }
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Delete this record?')) return;
+  await apiCall('/history/' + id, 'DELETE');
+  loadHistory();
+}
+
+// Auto-login if token exists
+window.addEventListener('load', async () => {
+  if (token) {
+    loading(true, 'LOADING...');
+    try {
+      const { data, ok } = await apiCall('/me');
+      if (ok) { await loadDashboard(data.user); }
+      else { token = null; localStorage.removeItem('ecg_token'); showPage('login'); }
+    } catch { showPage('login'); }
+    finally { loading(false); }
+  } else { showPage('login'); }
+});
+</script>
+</body>
+</html>

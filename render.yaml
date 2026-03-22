@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ecg-classifier
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --chdir backend app:app
+    envVars:
+      - key: JWT_SECRET_KEY
+        generateValue: true

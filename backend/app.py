@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""
-backend/app.py — Main Flask application
-Run: python backend/app.py
-"""
-
 import os, sys, pickle, json, numpy as np
 from datetime import datetime, timedelta
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -19,12 +16,15 @@ app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecg_app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = 'ecg-secret-key-2024'
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'ecg-secret-key-2024')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+
+MODEL_PATH   = os.path.join(BASE_DIR, 'outputs', 'final_ecg_model.keras')
+ENCODER_PATH = os.path.join(BASE_DIR, 'outputs', 'label_encoder.pkl')
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -66,14 +66,27 @@ CLASS_INFO = {
 def load_ml_model():
     global model, le
     import tensorflow as tf
-    print("Loading ECG model...")
-    model = tf.keras.models.load_model(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "final_ecg_model.keras"), compile=False)
-    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "label_encoder.pkl"),"rb") as f: le = pickle.load(f)
-    print(f"Model loaded | Classes: {list(le.classes_)}")
+    print(f"Loading model from: {MODEL_PATH}")
+    print(f"Model exists: {os.path.exists(MODEL_PATH)}")
+    print(f"Encoder exists: {os.path.exists(ENCODER_PATH)}")
+    if os.path.exists(MODEL_PATH) and os.path.exists(ENCODER_PATH):
+        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        with open(ENCODER_PATH,"rb") as f: le = pickle.load(f)
+        print(f"Model loaded | Classes: {list(le.classes_)}")
+    else:
+        print("WARNING: Model files not found!")
 
 def preprocess(signal):
     signal = signal[::5,:].astype("float32")
     return ((signal-np.mean(signal,axis=0,keepdims=True))/(np.std(signal,axis=0,keepdims=True)+1e-8))[np.newaxis,...]
+
+@app.route('/')
+def index():
+    return jsonify({'message':'ECG Classifier API','status':'running','model_loaded':model is not None})
+
+@app.route('/api/health')
+def health():
+    return jsonify({'status':'ok','model_loaded':model is not None,'model_path':MODEL_PATH,'model_exists':os.path.exists(MODEL_PATH)})
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -84,8 +97,7 @@ def register():
     if User.query.filter_by(email=email).first(): return jsonify({'error':'Email already registered'}),409
     user = User(name=name,email=email,password=bcrypt.generate_password_hash(password).decode('utf-8'))
     db.session.add(user); db.session.commit()
-    token = create_access_token(identity=str(user.id))
-    return jsonify({'message':'Account created!','token':token,'user':user.to_dict()}),201
+    return jsonify({'message':'Account created!','token':create_access_token(identity=str(user.id)),'user':user.to_dict()}),201
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -148,13 +160,10 @@ def stats():
     for p in preds: by_diag[p.diagnosis_name]=by_diag.get(p.diagnosis_name,0)+1; tc+=p.confidence
     return jsonify({'total':total,'by_diagnosis':by_diag,'avg_confidence':round(tc/total,1)})
 
-@app.route('/api/health')
-def health(): return jsonify({'status':'ok','model_loaded':model is not None})
+with app.app_context():
+    db.create_all()
+
+load_ml_model()
 
 if __name__=='__main__':
-    with app.app_context(): db.create_all(); print("Database ready")
-    load_ml_model()
-    print("\n========================================")
-    print("  ECG Backend — http://localhost:5000")
-    print("========================================\n")
     app.run(host='0.0.0.0',port=5000,debug=False)

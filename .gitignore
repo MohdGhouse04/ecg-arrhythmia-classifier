@@ -5,7 +5,3 @@ __pycache__/
 outputs/best_ecg_model.keras
 outputs/final_ecg_model.keras
 outputs/label_encoder.pkl
-outputs/training_curves.png
-outputs/confusion_matrix.png
-outputs/metrics.json
-*.mat

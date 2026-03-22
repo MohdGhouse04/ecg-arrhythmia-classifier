@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🫀 ECG Arrhythmia Classification — 95%+ Accuracy
 
 **12-Lead ECG | CNN + BiLSTM + Self-Attention | WFDB_ChapmanShaoxing**
@@ -140,3 +141,6 @@ outputs/
 
 TTA Test Accuracy: 95.62%
 ```
+=======
+# ecg-arrhythmia-classifier
+>>>>>>> d787db854b417b6de31a09ceeafd4169056f425c

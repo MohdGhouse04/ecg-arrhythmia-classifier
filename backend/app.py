@@ -67,8 +67,8 @@ def load_ml_model():
     global model, le
     import tensorflow as tf
     print("Loading ECG model...")
-    model = tf.keras.models.load_model("outputs/final_ecg_model.keras", compile=False)
-    with open("outputs/label_encoder.pkl","rb") as f: le = pickle.load(f)
+    model = tf.keras.models.load_model(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "final_ecg_model.keras"), compile=False)
+    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "label_encoder.pkl"),"rb") as f: le = pickle.load(f)
     print(f"Model loaded | Classes: {list(le.classes_)}")
 
 def preprocess(signal):
